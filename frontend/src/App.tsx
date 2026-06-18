@@ -467,7 +467,7 @@ export default function App() {
             <div>
               <h2>PMO Briefing</h2>
               <p className="muted briefing-subtitle">
-                One-click pipeline: Status → Risk → RAID → RAG → Executive Report
+                LangGraph pipeline: Status → Risk → RAID → RAG → Executive Report
               </p>
             </div>
             <div className="briefing-actions">
@@ -503,7 +503,7 @@ export default function App() {
                   </div>
                 ))}
                 <div className="pipeline-total">
-                  Total: {briefing.pipeline.total_duration_ms} ms
+                  LangGraph · Total: {briefing.pipeline.total_duration_ms} ms
                 </div>
               </div>
               <p className="muted briefing-hint">

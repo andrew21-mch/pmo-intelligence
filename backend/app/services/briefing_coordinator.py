@@ -1,26 +1,11 @@
-import time
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.raid_agent import RaidAgent
-from app.agents.reporting_agent import ReportingAgent
-from app.agents.risk_agent import RiskAgent
-from app.agents.status_agent import StatusAgent
+from app.graphs.briefing_graph import briefing_graph
 from app.services.project_context import ProjectContext
-from app.services.rag import RAGService
-from app.services.raid_service import RaidService
-
-AGENT_LABELS = {
-    "status": "Status Agent",
-    "risk": "Risk Agent",
-    "raid": "RAID Agent",
-    "rag": "RAG Retrieval",
-    "reporting": "Reporting Agent",
-}
 
 
 class BriefingCoordinator:
-    """Runs the full PMO intelligence pipeline and records per-step latency."""
+    """Runs the PMO briefing pipeline via LangGraph."""
 
     async def run(
         self,
@@ -29,34 +14,16 @@ class BriefingCoordinator:
         *,
         template: str = "weekly",
     ) -> dict:
-        steps: list[dict] = []
-
-        status = await self._run_step(steps, "status", StatusAgent().analyze, ctx)
-        risk = await self._run_step(steps, "risk", RiskAgent().analyze, ctx)
-        raid_report = await self._run_step(steps, "raid", RaidAgent().analyze, ctx)
-        await RaidService(db).save_report(raid_report)
-
-        rag_hits = await self._run_step(
-            steps,
-            "rag",
-            self._fetch_governance_context,
-            ctx,
+        final_state = await briefing_graph.ainvoke(
+            {"template": template, "steps": []},
+            config={"configurable": {"ctx": ctx, "db": db}},
         )
 
-        report = await self._run_step(
-            steps,
-            "reporting",
-            ReportingAgent().generate,
-            ctx,
-            template,
-            db,
-            rag_hits=rag_hits,
-            status=status,
-            risk=risk,
-            raid_report=raid_report,
-            save_raid=False,
-        )
-
+        status = final_state["status"]
+        risk = final_state["risk"]
+        raid_report = final_state["raid_report"]
+        report = final_state["report"]
+        steps = final_state.get("steps", [])
         total_ms = sum(step["duration_ms"] for step in steps)
 
         return {
@@ -72,6 +39,7 @@ class BriefingCoordinator:
             },
             "report": report,
             "pipeline": {
+                "orchestrator": "langgraph",
                 "total_duration_ms": total_ms,
                 "steps": steps,
             },
@@ -82,38 +50,3 @@ class BriefingCoordinator:
                 "citations": len(report.get("citations", [])),
             },
         }
-
-    @staticmethod
-    async def _fetch_governance_context(ctx: ProjectContext) -> list[dict]:
-        rag = RAGService()
-        query = f"PMO governance risk escalation procedures for {ctx.project.name}"
-        return await rag.search(query, limit=3, project_key=ctx.project.key)
-
-    @staticmethod
-    async def _run_step(steps: list[dict], agent: str, fn, *args, **kwargs):
-        started = time.perf_counter()
-        try:
-            result = await fn(*args, **kwargs)
-        except Exception as exc:
-            duration_ms = round((time.perf_counter() - started) * 1000)
-            steps.append(
-                {
-                    "agent": agent,
-                    "label": AGENT_LABELS.get(agent, agent),
-                    "duration_ms": duration_ms,
-                    "status": "error",
-                    "error": str(exc),
-                }
-            )
-            raise
-
-        duration_ms = round((time.perf_counter() - started) * 1000)
-        steps.append(
-            {
-                "agent": agent,
-                "label": AGENT_LABELS.get(agent, agent),
-                "duration_ms": duration_ms,
-                "status": "ok",
-            }
-        )
-        return result

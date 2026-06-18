@@ -20,7 +20,7 @@ AI-powered PMO intelligence platform demonstrating agentic AI, enterprise Jira i
 | Layer | Technology |
 |-------|------------|
 | Backend | Python, FastAPI |
-| AI | Ollama (local) or OpenAI |
+| AI | Ollama (local) or OpenAI, **LangGraph** orchestration |
 | Database | PostgreSQL |
 | Vector DB | Qdrant |
 | Frontend | React, Vite |
@@ -174,13 +174,15 @@ flowchart TB
     Meeting --> Jira
 ```
 
-### PMO Briefing Pipeline
+### PMO Briefing Pipeline (LangGraph)
+
+The briefing orchestrator is a **LangGraph `StateGraph`** (`backend/app/graphs/briefing_graph.py`):
 
 ```
-Status Agent → Risk Agent → RAID Agent → RAG Retrieval → Reporting Agent → PDF
+START → status_agent → risk_agent → raid_agent → rag_agent → report_agent → END
 ```
 
-Each step records latency (ms). RAID entries are persisted; the executive report includes governance citations when documents are indexed.
+Each node is an async LangGraph node that updates shared state and appends pipeline timing metrics. `BriefingCoordinator` invokes the compiled graph via `briefing_graph.ainvoke()`.
 
 ## Key API Endpoints
 
@@ -204,6 +206,7 @@ Each step records latency (ms). RAID entries are persisted; the executive report
 ```
 backend/
   app/agents/          # Status, Risk, RAID, Meeting, Reporting agents
+  app/graphs/          # LangGraph StateGraph orchestration
   app/api/             # FastAPI route handlers
   app/integrations/    # Jira client + sync
   app/services/        # RAG, embeddings, briefing coordinator, PDF export
