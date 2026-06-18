@@ -31,7 +31,23 @@ import {
   importTasksCsv,
   downloadCsvTemplate,
   CsvImportResult,
+  getIntegrationsStatus,
+  IntegrationsStatus,
 } from "./api";
+
+function integrationBadgeClass(status: string) {
+  if (status === "healthy") return "badge-green";
+  if (status === "degraded") return "badge-amber";
+  if (status === "not_configured") return "badge-gray";
+  return "badge-red";
+}
+
+function integrationShortLabel(status: string) {
+  if (status === "healthy") return "ready";
+  if (status === "degraded") return "degraded";
+  if (status === "not_configured") return "n/a";
+  return "down";
+}
 
 function healthClass(health: string) {
   if (health === "Green") return "health-green";
@@ -59,7 +75,7 @@ const RAID_COLUMNS = [
   { type: "Dependency" as const, letter: "D", label: "Dependencies", hint: "What we rely on" },
 ];
 
-type AppTab = "briefing" | "analysis" | "raid" | "meetings" | "knowledge" | "reports" | "projects";
+type AppTab = "briefing" | "analysis" | "raid" | "meetings" | "knowledge" | "reports" | "projects" | "integrations";
 
 const APP_TABS: { id: AppTab; label: string }[] = [
   { id: "briefing", label: "PMO Briefing" },
@@ -69,6 +85,7 @@ const APP_TABS: { id: AppTab; label: string }[] = [
   { id: "knowledge", label: "Knowledge Base" },
   { id: "reports", label: "Reports" },
   { id: "projects", label: "Projects" },
+  { id: "integrations", label: "Integrations" },
 ];
 
 export default function App() {
@@ -82,6 +99,8 @@ export default function App() {
   const [transcript, setTranscript] = useState("");
   const [createJiraTickets, setCreateJiraTickets] = useState(false);
   const [health, setHealth] = useState<string>("checking");
+  const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatus | null>(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [raidLoading, setRaidLoading] = useState(false);
@@ -114,16 +133,30 @@ export default function App() {
     return grouped;
   }, [raidEntries]);
 
+  const refreshIntegrations = useCallback(async () => {
+    setIntegrationsLoading(true);
+    try {
+      const status = await getIntegrationsStatus();
+      setIntegrationsStatus(status);
+    } catch {
+      setIntegrationsStatus(null);
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      const [healthRes, statsRes, projectsRes] = await Promise.all([
+      const [healthRes, statsRes, projectsRes, integrationsRes] = await Promise.all([
         checkHealth(),
         getStats(),
         getProjects(),
+        getIntegrationsStatus().catch(() => null),
       ]);
       setHealth(healthRes.status);
       setStats(statsRes);
       setProjects(projectsRes);
+      if (integrationsRes) setIntegrationsStatus(integrationsRes);
       setError(null);
       if (projectsRes.length > 0 && !selectedProject) {
         setSelectedProject(projectsRes[0].key);
@@ -382,6 +415,9 @@ export default function App() {
     }
   };
 
+  const ollamaIntegration = integrationsStatus?.integrations.find((i) => i.id === "ollama");
+  const langgraphIntegration = integrationsStatus?.integrations.find((i) => i.id === "langgraph");
+
   return (
     <div className="app">
       <header className="header">
@@ -390,9 +426,31 @@ export default function App() {
           <p className="subtitle">Jira sync · RAG · Reports · RAID · Meeting intelligence</p>
         </div>
         <div className="header-actions">
-          <span className={`badge ${health === "healthy" ? "badge-green" : "badge-red"}`}>
-            API: {health}
-          </span>
+          <div className="header-status-group">
+            <span className={`badge ${health === "healthy" ? "badge-green" : "badge-red"}`}>
+              API: {health}
+            </span>
+            {langgraphIntegration && (
+              <button
+                type="button"
+                className={`badge integration-badge ${integrationBadgeClass(langgraphIntegration.status)}`}
+                onClick={() => setActiveTab("integrations")}
+                title={langgraphIntegration.message}
+              >
+                LangGraph: {integrationShortLabel(langgraphIntegration.status)}
+              </button>
+            )}
+            {ollamaIntegration && (
+              <button
+                type="button"
+                className={`badge integration-badge ${integrationBadgeClass(ollamaIntegration.status)}`}
+                onClick={() => setActiveTab("integrations")}
+                title={ollamaIntegration.message}
+              >
+                Ollama: {integrationShortLabel(ollamaIntegration.status)}
+              </button>
+            )}
+          </div>
           <button className="btn-secondary" onClick={handleSeed} disabled={syncing}>
             Load Demo Data
           </button>
@@ -421,8 +479,8 @@ export default function App() {
         ))}
       </section>
 
-      {projects.length > 0 && (
-        <div className="workspace-toolbar">
+      <div className="workspace-toolbar">
+        {projects.length > 0 ? (
           <label className="project-select-label">
             Project
             <select
@@ -436,22 +494,24 @@ export default function App() {
               ))}
             </select>
           </label>
-          <nav className="main-tabs" aria-label="Dashboard sections">
-            {APP_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={activeTab === tab.id ? "main-tab main-tab-active" : "main-tab"}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      )}
+        ) : (
+          <span className="muted">No project loaded — use Integrations tab or Load Demo Data</span>
+        )}
+        <nav className="main-tabs" aria-label="Dashboard sections">
+          {APP_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeTab === tab.id ? "main-tab main-tab-active" : "main-tab"}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-      {projects.length === 0 && (
+      {projects.length === 0 && activeTab !== "integrations" && (
         <section className="panel">
           <h2>Get Started</h2>
           <p className="muted">
@@ -973,6 +1033,51 @@ export default function App() {
             </table>
           </section>
         </>
+      )}
+
+      {activeTab === "integrations" && (
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Integrations Status</h2>
+              <p className="muted briefing-subtitle">
+                LangGraph, Ollama, Jira, Qdrant, and PostgreSQL health
+              </p>
+            </div>
+            <button className="btn-secondary" onClick={refreshIntegrations} disabled={integrationsLoading}>
+              {integrationsLoading ? "Checking…" : "Refresh Status"}
+            </button>
+          </div>
+          {integrationsStatus ? (
+            <>
+              <div className="briefing-headline">
+                <span className={`badge ${integrationBadgeClass(integrationsStatus.overall === "healthy" ? "healthy" : integrationsStatus.overall === "unhealthy" ? "down" : "degraded")}`}>
+                  Overall: {integrationsStatus.overall}
+                </span>
+                <span className="muted">
+                  LLM: {integrationsStatus.llm_provider} / {integrationsStatus.llm_model}
+                </span>
+                <span className="muted">Checked: {integrationsStatus.checked_at.slice(0, 19).replace("T", " ")} UTC</span>
+              </div>
+              <div className="integrations-grid">
+                {integrationsStatus.integrations.map((item) => (
+                  <article key={item.id} className={`integration-card integration-${item.status}`}>
+                    <div className="integration-card-header">
+                      <h3>{item.name}</h3>
+                      <span className={`badge ${integrationBadgeClass(item.status)}`}>{item.status}</span>
+                    </div>
+                    <p className="integration-message">{item.message}</p>
+                    {Object.keys(item.details).length > 0 && (
+                      <pre className="integration-details">{JSON.stringify(item.details, null, 2)}</pre>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="muted">Unable to load integration status. Is the API running?</p>
+          )}
+        </section>
       )}
     </div>
   );

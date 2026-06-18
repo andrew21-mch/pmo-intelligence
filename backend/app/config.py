@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://host.docker.internal:11434/v1"
     ollama_model: str = "llama3.2"
     ollama_embed_model: str = "nomic-embed-text"
+    ollama_llm_timeout_seconds: int = 60
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"

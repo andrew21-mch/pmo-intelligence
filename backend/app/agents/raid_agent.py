@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from app.agents.risk_agent import RiskAgent
-from app.agents.schemas import RaidEntry, RaidEntryType, RaidLogReport, RiskLevel
+from app.agents.schemas import RaidEntry, RaidEntryType, RaidLogReport, RiskAssessment, RiskLevel
 from app.services.project_context import (
     ProjectContext,
     active_sprints,
@@ -12,7 +12,7 @@ from app.services.project_context import (
 
 
 class RaidAgent:
-    async def analyze(self, ctx: ProjectContext) -> RaidLogReport:
+    async def analyze(self, ctx: ProjectContext, *, risk: RiskAssessment | None = None) -> RaidLogReport:
         now = datetime.now(UTC)
         entries: list[RaidEntry] = []
 
@@ -111,7 +111,8 @@ class RaidAgent:
                 )
             )
 
-        risk = await RiskAgent().analyze(ctx)
+        if risk is None:
+            risk = await RiskAgent().analyze(ctx)
         summary = (
             f"RAID log for {ctx.project.name}: {len(entries)} entries "
             f"({sum(1 for e in entries if e.entry_type == RaidEntryType.RISK)} risks, "

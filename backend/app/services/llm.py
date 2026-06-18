@@ -1,5 +1,7 @@
 import json
+import re
 
+import httpx
 import structlog
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -7,6 +9,21 @@ from pydantic import BaseModel
 from app.config import settings
 
 logger = structlog.get_logger(__name__)
+
+_OLLAMA_JSON_HINTS: dict[str, str] = {
+    "StatusLLMOutput": (
+        'Return JSON only: {"executive_summary": "2-3 sentence summary", '
+        '"recommendations": ["action 1", "action 2"]}'
+    ),
+    "RiskLLMOutput": (
+        'Return JSON only: {"reasoning": "2-3 sentence risk analysis", '
+        '"recommended_actions": ["action 1", "action 2"]}'
+    ),
+    "MeetingLLMOutput": (
+        'Return JSON only with keys: summary, action_items (array of {description, assignee}), '
+        "decisions (array of {description}), risks_identified (array of {description, severity})."
+    ),
+}
 
 
 class LLMService:
@@ -28,13 +45,15 @@ class LLMService:
             raise RuntimeError("LLM not configured")
 
         if self._client is None:
+            timeout = httpx.Timeout(settings.ollama_llm_timeout_seconds, connect=10.0)
             if settings.llm_provider == "ollama":
                 self._client = AsyncOpenAI(
                     base_url=settings.ollama_base_url,
                     api_key="ollama",
+                    timeout=timeout,
                 )
             else:
-                self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+                self._client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=timeout)
 
         return self._client
 
@@ -74,17 +93,16 @@ class LLMService:
             logger.info("llm_completion", provider="openai", model=self.model, schema=schema.__name__)
             return parsed
 
-        schema_hint = json.dumps(schema.model_json_schema(), indent=2)
+        json_hint = _OLLAMA_JSON_HINTS.get(
+            schema.__name__,
+            f"Return JSON only with these fields: {', '.join(schema.model_fields.keys())}.",
+        )
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        f"{system}\n\n"
-                        "Respond with valid JSON only, no markdown, matching this schema:\n"
-                        f"{schema_hint}"
-                    ),
+                    "content": f"{system}\n\n{json_hint}\nDo not return a JSON schema — return actual data values.",
                 },
                 {"role": "user", "content": user},
             ],
@@ -93,5 +111,27 @@ class LLMService:
         content = response.choices[0].message.content
         if not content:
             raise RuntimeError("LLM returned empty response")
+        parsed = _parse_ollama_json(content, schema)
         logger.info("llm_completion", provider=settings.llm_provider, model=self.model, schema=schema.__name__)
-        return schema.model_validate_json(content)
+        return parsed
+
+
+def _parse_ollama_json(content: str, schema: type[BaseModel]) -> BaseModel:
+    text = content.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("LLM response is not a JSON object")
+
+    # Ollama sometimes echoes the JSON schema instead of filling values
+    if "properties" in data and "type" in data and not _has_schema_fields(data, schema):
+        raise ValueError("LLM returned JSON schema instead of data")
+
+    return schema.model_validate(data)
+
+
+def _has_schema_fields(data: dict, schema: type[BaseModel]) -> bool:
+    return any(field in data for field in schema.model_fields)

@@ -13,6 +13,7 @@ from app.api.documents import router as documents_router
 from app.api.jira import router as jira_router
 from app.api.raid import router as raid_router
 from app.api.reports import router as reports_router
+from app.api.system import router as system_router
 from app.config import settings
 from app.db.base import Base
 from app.db.session import async_session, engine
@@ -79,6 +80,7 @@ app.include_router(raid_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(dev_router, prefix="/api")
+app.include_router(system_router, prefix="/api")
 
 
 @app.get("/health")

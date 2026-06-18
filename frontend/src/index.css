@@ -48,8 +48,9 @@ h1 {
 
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.65rem;
 }
 
 button {
@@ -81,6 +82,16 @@ button:disabled {
 .badge-green {
   background: #dcfce7;
   color: #166534;
+}
+
+.badge-amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-gray {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 .badge-red {
@@ -862,6 +873,81 @@ li {
   font-size: 0.85rem;
   font-weight: 600;
   color: #475569;
+}
+
+.integration-badge {
+  cursor: pointer;
+  border: none;
+  font: inherit;
+}
+
+.integration-badge:hover {
+  filter: brightness(0.95);
+}
+
+.integrations-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.integration-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  background: #f8fafc;
+}
+
+.integration-card.integration-healthy {
+  border-left: 4px solid #16a34a;
+}
+
+.integration-card.integration-degraded {
+  border-left: 4px solid #d97706;
+}
+
+.integration-card.integration-down {
+  border-left: 4px solid #dc2626;
+}
+
+.integration-card.integration-not_configured {
+  border-left: 4px solid #94a3b8;
+}
+
+.integration-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.integration-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.integration-message {
+  margin: 0 0 0.5rem;
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.integration-details {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.header-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .report-meta {

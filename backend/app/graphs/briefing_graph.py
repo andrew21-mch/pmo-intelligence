@@ -70,7 +70,7 @@ async def raid_node(state: BriefingState, config: dict) -> dict:
     ctx: ProjectContext = _configurable(config)["ctx"]
     db = _configurable(config)["db"]
     started = time.perf_counter()
-    raid_report = await RaidAgent().analyze(ctx)
+    raid_report = await RaidAgent().analyze(ctx, risk=state.get("risk"))
     await RaidService(db).save_report(raid_report)
     duration_ms = round((time.perf_counter() - started) * 1000)
     return {"raid_report": raid_report, "steps": [_record_step("raid", duration_ms)]}

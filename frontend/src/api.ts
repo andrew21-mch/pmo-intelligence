@@ -356,3 +356,23 @@ export async function downloadReportPdf(html: string, title: string): Promise<vo
 export function checkHealth(): Promise<{ status: string }> {
   return fetchJson("/health");
 }
+
+export interface IntegrationStatus {
+  id: string;
+  name: string;
+  status: "healthy" | "degraded" | "down" | "not_configured";
+  message: string;
+  details: Record<string, unknown>;
+}
+
+export interface IntegrationsStatus {
+  checked_at: string;
+  overall: string;
+  llm_provider: string;
+  llm_model: string;
+  integrations: IntegrationStatus[];
+}
+
+export function getIntegrationsStatus(): Promise<IntegrationsStatus> {
+  return fetchJson("/api/system/integrations");
+}
