@@ -104,6 +104,51 @@ export function triggerSync(): Promise<SyncResponse> {
   return fetchJson("/api/jira/sync", { method: "POST" });
 }
 
+export interface CsvImportResult {
+  mode: "jira" | "local" | "none";
+  project_key: string;
+  total_rows: number;
+  created: number;
+  failed: number;
+  issue_keys: string[];
+  errors: string[];
+  synced_records: number | null;
+}
+
+export async function importTasksCsv(
+  projectKey: string,
+  file: File,
+  pushToJira: boolean
+): Promise<CsvImportResult> {
+  const form = new FormData();
+  form.append("project_key", projectKey);
+  form.append("push_to_jira", String(pushToJira));
+  form.append("file", file);
+
+  const response = await fetch(`${API_URL}/api/jira/import/csv`, { method: "POST", body: form });
+  if (!response.ok) {
+    let message = "CSV import failed";
+    try {
+      const body = await response.json();
+      message = body.detail ?? message;
+    } catch {
+      const text = await response.text();
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+export function downloadCsvTemplate(): void {
+  const link = document.createElement("a");
+  link.href = `${API_URL}/api/jira/import/csv/template`;
+  link.download = "pmo-tasks-template.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export function seedDemoData(): Promise<{ status: string; project_key?: string; issues?: number }> {
   return fetchJson("/api/dev/seed", { method: "POST" });
 }

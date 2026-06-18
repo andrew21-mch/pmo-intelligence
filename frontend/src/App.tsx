@@ -28,6 +28,9 @@ import {
   triggerSync,
   uploadDocument,
   downloadReportPdf,
+  importTasksCsv,
+  downloadCsvTemplate,
+  CsvImportResult,
 } from "./api";
 
 function healthClass(health: string) {
@@ -93,6 +96,9 @@ export default function App() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>("briefing");
+  const [csvImportLoading, setCsvImportLoading] = useState(false);
+  const [pushToJira, setPushToJira] = useState(true);
+  const [csvImportResult, setCsvImportResult] = useState<CsvImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const raidByType = useMemo(() => {
@@ -331,6 +337,27 @@ export default function App() {
       setError(err instanceof Error ? err.message : "PDF export failed");
     } finally {
       setPdfExportLoading(false);
+    }
+  };
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedProject) return;
+    setCsvImportLoading(true);
+    setError(null);
+    setCsvImportResult(null);
+    try {
+      const result = await importTasksCsv(selectedProject, file, pushToJira);
+      setCsvImportResult(result);
+      await refresh();
+      if (selectedProject) {
+        await loadAnalysis(selectedProject);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CSV import failed");
+    } finally {
+      setCsvImportLoading(false);
+      e.target.value = "";
     }
   };
 
@@ -867,31 +894,85 @@ export default function App() {
       )}
 
       {projects.length > 0 && activeTab === "projects" && (
-        <section className="panel">
-          <h2>Projects</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Name</th>
-                <th>Issues</th>
-                <th>Epics</th>
-                <th>Sprints</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map((p) => (
-                <tr key={p.key}>
-                  <td>{p.key}</td>
-                  <td>{p.name}</td>
-                  <td>{p.issue_count}</td>
-                  <td>{p.epic_count}</td>
-                  <td>{p.sprint_count}</td>
+        <>
+          <section className="panel import-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Import Tasks from CSV</h2>
+                <p className="muted import-subtitle">
+                  Bulk-create tasks in Jira or import locally for demo analysis.
+                </p>
+              </div>
+              <div className="header-actions">
+                <button type="button" className="btn-secondary" onClick={downloadCsvTemplate}>
+                  Download Template
+                </button>
+                <label className="upload-btn">
+                  {csvImportLoading ? "Importing…" : "Upload CSV"}
+                  <input type="file" accept=".csv" onChange={handleCsvImport} hidden disabled={csvImportLoading} />
+                </label>
+              </div>
+            </div>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={pushToJira}
+                onChange={(e) => setPushToJira(e.target.checked)}
+              />
+              Push to Jira (creates real issues, then syncs). Uncheck to import into local database only.
+            </label>
+            <p className="muted csv-format-hint">
+              Required column: <strong>summary</strong>. Optional: description, issue_type, priority, due_date, status, assignee.
+            </p>
+            {csvImportResult && (
+              <div className="import-results">
+                <p>
+                  <strong>{csvImportResult.created}</strong> of {csvImportResult.total_rows} tasks imported
+                  ({csvImportResult.mode === "jira" ? "Jira + sync" : "local database"})
+                  {csvImportResult.synced_records != null && (
+                    <> · {csvImportResult.synced_records} records synced</>
+                  )}
+                </p>
+                {csvImportResult.issue_keys.length > 0 && (
+                  <p className="muted">Created: {csvImportResult.issue_keys.join(", ")}</p>
+                )}
+                {csvImportResult.errors.length > 0 && (
+                  <ul className="import-errors">
+                    {csvImportResult.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="panel">
+            <h2>Projects</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Name</th>
+                  <th>Issues</th>
+                  <th>Epics</th>
+                  <th>Sprints</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody>
+                {projects.map((p) => (
+                  <tr key={p.key}>
+                    <td>{p.key}</td>
+                    <td>{p.name}</td>
+                    <td>{p.issue_count}</td>
+                    <td>{p.epic_count}</td>
+                    <td>{p.sprint_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </>
       )}
     </div>
   );

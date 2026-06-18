@@ -184,6 +184,36 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.import-panel {
+  border: 1px solid #cbd5e1;
+}
+
+.import-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}
+
+.csv-format-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+}
+
+.import-results {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.import-errors {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+
 .panel {
   background: white;
   border-radius: 12px;

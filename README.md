@@ -59,7 +59,28 @@ docker-compose up -d api
 
 3. Click **Sync Jira** in the header
 4. Select your project (e.g. **SCRUM**)
-5. **Generate PMO Briefing** for a full end-to-end run
+5. **Projects** tab → upload a CSV to bulk-create Jira tasks (or import locally)
+6. **Generate PMO Briefing** for a full end-to-end run
+
+## CSV Task Import
+
+Import tasks from a spreadsheet on the **Projects** tab.
+
+1. Click **Download Template** for the expected format
+2. Fill in rows (required column: `summary`)
+3. **Upload CSV** — with **Push to Jira** checked to create real Jira issues and auto-sync
+
+**Optional columns:** `description`, `issue_type`, `priority`, `due_date`, `status`, `assignee`
+
+Uncheck **Push to Jira** to import into the local database only (useful for demo mode without Jira credentials).
+
+```bash
+curl -O http://localhost:8000/api/jira/import/csv/template
+curl -X POST http://localhost:8000/api/jira/import/csv \
+  -F "project_key=SCRUM" \
+  -F "push_to_jira=true" \
+  -F "file=@pmo-tasks-template.csv"
+```
 
 ## LLM — Local Ollama (default)
 
@@ -166,6 +187,8 @@ Each step records latency (ms). RAID entries are persisted; the executive report
 | Endpoint | Description |
 |----------|-------------|
 | `POST /api/jira/sync` | Sync all Jira projects |
+| `POST /api/jira/import/csv` | Import tasks from CSV (Jira or local) |
+| `GET /api/jira/import/csv/template` | Download sample CSV template |
 | `POST /api/agents/projects/{key}/briefing` | Full PMO briefing pipeline |
 | `GET /api/agents/projects/{key}/status` | Status agent output |
 | `GET /api/agents/projects/{key}/risk` | Risk agent output |

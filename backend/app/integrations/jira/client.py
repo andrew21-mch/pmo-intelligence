@@ -91,6 +91,8 @@ class JiraClient:
         summary: str,
         issue_type: str = "Task",
         due_date: str | None = None,
+        description: str | None = None,
+        priority: str | None = None,
     ) -> dict:
         fields: dict[str, Any] = {
             "project": {"key": project_key},
@@ -99,6 +101,19 @@ class JiraClient:
         }
         if due_date:
             fields["duedate"] = due_date
+        if description:
+            fields["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": description[:32000]}],
+                    }
+                ],
+            }
+        if priority:
+            fields["priority"] = {"name": priority}
 
         return await self._request("POST", "/rest/api/3/issue", json={"fields": fields})
 

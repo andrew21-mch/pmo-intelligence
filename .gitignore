@@ -84,3 +84,7 @@ docker-compose.override.yml
 *.bak
 *.tmp
 .cache/
+
+# Private local notes (not for GitHub)
+PROJECT_GUIDE.local.md
+*.local.md
