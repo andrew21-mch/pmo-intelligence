@@ -13,3 +13,4 @@ qdrant-client==1.12.1
 apscheduler==3.10.4
 python-multipart==0.0.20
 structlog==24.4.0
+xhtml2pdf==0.2.16

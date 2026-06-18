@@ -8,14 +8,17 @@ from sqlalchemy import text
 
 from app.api.agents import router as agents_router
 from app.api.dev import router as dev_router
+from app.api.documents import router as documents_router
 from app.api.jira import router as jira_router
 from app.api.raid import router as raid_router
+from app.api.reports import router as reports_router
 from app.config import settings
 from app.db.base import Base
 from app.db.session import async_session, engine
 from app.integrations.jira.sync import JiraSyncService
 from app.logging_config import setup_logging
-from app.models import raid as raid_models  # noqa: F401 — register tables
+from app.models import document as document_models  # noqa: F401
+from app.models import raid as raid_models  # noqa: F401
 
 logger = structlog.get_logger(__name__)
 scheduler = AsyncIOScheduler()
@@ -71,6 +74,8 @@ app.add_middleware(
 app.include_router(jira_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(raid_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
+app.include_router(documents_router, prefix="/api")
 app.include_router(dev_router, prefix="/api")
 
 

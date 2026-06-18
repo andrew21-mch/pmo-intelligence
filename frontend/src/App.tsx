@@ -3,22 +3,29 @@ import {
   analyzeMeeting,
   checkHealth,
   DashboardStats,
+  DocumentInfo,
+  ExecutiveReport,
   generateRaid,
+  generateReport,
   getProjectRisk,
   getProjects,
   getProjectStatus,
   getRaidEntries,
   getSampleTranscript,
   getStats,
+  listDocuments,
   MeetingReport,
   ProjectSummary,
   ProjectStatusReport,
   RaidEntry,
   RiskAssessment,
   seedDemoData,
+  seedGovernanceDoc,
   seedJiraProject,
   listJiraProjectsForSeed,
   triggerSync,
+  uploadDocument,
+  downloadReportPdf,
 } from "./api";
 
 function healthClass(health: string) {
@@ -62,6 +69,13 @@ export default function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [raidLoading, setRaidLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
+  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [report, setReport] = useState<ExecutiveReport | null>(null);
+  const [reportTemplate, setReportTemplate] = useState("weekly");
+  const [reportView, setReportView] = useState<"markdown" | "html">("html");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [pdfExportLoading, setPdfExportLoading] = useState(false);
+  const [docLoading, setDocLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const raidByType = useMemo(() => {
@@ -106,6 +120,15 @@ export default function App() {
     }
   }, []);
 
+  const loadDocuments = useCallback(async (projectKey: string) => {
+    try {
+      const docs = await listDocuments(projectKey);
+      setDocuments(docs);
+    } catch {
+      setDocuments([]);
+    }
+  }, []);
+
   const loadAnalysis = useCallback(async (projectKey: string) => {
     if (!projectKey) return;
     setAnalyzing(true);
@@ -117,13 +140,13 @@ export default function App() {
       setStatus(statusRes);
       setRisk(riskRes);
       setError(null);
-      await loadRaid(projectKey);
+      await Promise.all([loadRaid(projectKey), loadDocuments(projectKey)]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setAnalyzing(false);
     }
-  }, [loadRaid]);
+  }, [loadRaid, loadDocuments]);
 
   useEffect(() => {
     refresh();
@@ -220,6 +243,61 @@ export default function App() {
     }
   };
 
+  const handleSeedGovernance = async () => {
+    if (!selectedProject) return;
+    setDocLoading(true);
+    try {
+      await seedGovernanceDoc(selectedProject);
+      await loadDocuments(selectedProject);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to seed governance doc");
+    } finally {
+      setDocLoading(false);
+    }
+  };
+
+  const handleUploadDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedProject) return;
+    setDocLoading(true);
+    try {
+      await uploadDocument(file, { project_key: selectedProject, doc_type: "governance" });
+      await loadDocuments(selectedProject);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setDocLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (!selectedProject) return;
+    setReportLoading(true);
+    setError(null);
+    try {
+      const result = await generateReport(selectedProject, reportTemplate);
+      setReport(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Report generation failed");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!report) return;
+    setPdfExportLoading(true);
+    setError(null);
+    try {
+      await downloadReportPdf(report.html, report.title);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PDF export failed");
+    } finally {
+      setPdfExportLoading(false);
+    }
+  };
+
   const handleAnalyzeMeeting = async () => {
     if (!selectedProject) return;
     setMeetingLoading(true);
@@ -246,7 +324,7 @@ export default function App() {
       <header className="header">
         <div>
           <h1>PMO Intelligence Platform</h1>
-          <p className="subtitle">Jira sync · Health · Risk · RAID · Meeting intelligence</p>
+          <p className="subtitle">Jira sync · RAG · Reports · RAID · Meeting intelligence</p>
         </div>
         <div className="header-actions">
           <span className={`badge ${health === "healthy" ? "badge-green" : "badge-red"}`}>
@@ -554,6 +632,109 @@ export default function App() {
                 <p className="muted">Jira tickets created: {meetingReport.jira_tickets_created.join(", ")}</p>
               )}
             </div>
+          )}
+        </section>
+      )}
+
+      {projects.length > 0 && selectedProject && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Knowledge Base (RAG)</h2>
+            <div className="header-actions">
+              <button className="btn-secondary" onClick={handleSeedGovernance} disabled={docLoading}>
+                Load Sample Governance Doc
+              </button>
+              <label className="upload-btn">
+                {docLoading ? "Uploading…" : "Upload Document"}
+                <input type="file" accept=".txt,.md,.markdown" onChange={handleUploadDocument} hidden />
+              </label>
+            </div>
+          </div>
+          <p className="muted">Upload PMO governance docs — agents cite them in executive reports.</p>
+          {documents.length === 0 ? (
+            <p className="muted">No documents indexed yet.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr><th>Title</th><th>Type</th><th>Chunks</th><th>Uploaded</th></tr>
+              </thead>
+              <tbody>
+                {documents.map((d) => (
+                  <tr key={d.id}>
+                    <td>{d.title}</td>
+                    <td>{d.doc_type}</td>
+                    <td>{d.chunk_count}</td>
+                    <td>{d.uploaded_at.slice(0, 10)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {projects.length > 0 && selectedProject && (
+        <section className="panel report-panel">
+          <div className="panel-header">
+            <h2>Executive Reporting</h2>
+            <div className="header-actions">
+              <select value={reportTemplate} onChange={(e) => setReportTemplate(e.target.value)}>
+                <option value="weekly">Weekly Status</option>
+                <option value="monthly">Monthly Portfolio</option>
+                <option value="steering_committee">Steering Committee</option>
+              </select>
+              <button onClick={handleGenerateReport} disabled={reportLoading}>
+                {reportLoading ? "Generating…" : "Generate Report"}
+              </button>
+            </div>
+          </div>
+          {report && (
+            <>
+              <div className="report-meta">
+                <span className={`health-badge ${healthClass(report.health)}`}>{report.health}</span>
+                <span className={`risk-badge ${riskClass(report.risk_score)}`}>Risk: {report.risk_score}</span>
+                <span className="muted">{report.generated_at}</span>
+              </div>
+              {report.citations.length > 0 && (
+                <div className="report-citations">
+                  <h4>Governance Citations ({report.citations.length})</h4>
+                  {report.citations.map((c, i) => (
+                    <blockquote key={i}><strong>{c.title}</strong> — {c.excerpt}</blockquote>
+                  ))}
+                </div>
+              )}
+              <div className="report-tabs">
+                <button
+                  className={reportView === "html" ? "tab-active" : "btn-secondary"}
+                  onClick={() => setReportView("html")}
+                >
+                  Report Preview
+                </button>
+                <button
+                  className={reportView === "markdown" ? "tab-active" : "btn-secondary"}
+                  onClick={() => setReportView("markdown")}
+                >
+                  Raw Markdown
+                </button>
+                <button
+                  className="btn-secondary report-export-btn"
+                  onClick={handleDownloadPdf}
+                  disabled={pdfExportLoading}
+                >
+                  {pdfExportLoading ? "Exporting…" : "Download PDF"}
+                </button>
+              </div>
+              {reportView === "html" ? (
+                <iframe
+                  className="report-iframe"
+                  title="Report preview"
+                  srcDoc={report.html}
+                  sandbox=""
+                />
+              ) : (
+                <pre className="report-preview">{report.markdown}</pre>
+              )}
+            </>
           )}
         </section>
       )}

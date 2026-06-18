@@ -17,9 +17,11 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"  # ollama | openai
     ollama_base_url: str = "http://host.docker.internal:11434/v1"
     ollama_model: str = "llama3.2"
+    ollama_embed_model: str = "nomic-embed-text"
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_embed_model: str = "text-embedding-3-small"
 
     jira_base_url: str = ""
     jira_email: str = ""

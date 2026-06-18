@@ -188,6 +188,89 @@ export function getSampleTranscript(): Promise<{ transcript: string }> {
   return fetchJson("/api/agents/meetings/sample-transcript");
 }
 
+export interface DocumentInfo {
+  id: number;
+  filename: string;
+  title: string;
+  doc_type: string;
+  project_key: string | null;
+  chunk_count: number;
+  uploaded_at: string;
+}
+
+export interface ExecutiveReport {
+  template: string;
+  project_key: string;
+  project_name: string;
+  title: string;
+  generated_at: string;
+  markdown: string;
+  html: string;
+  health: string;
+  risk_score: string;
+  citations: { title: string; excerpt: string; doc_id: number | null }[];
+}
+
+export function listDocuments(projectKey?: string): Promise<DocumentInfo[]> {
+  const q = projectKey ? `?project_key=${projectKey}` : "";
+  return fetchJson(`/api/documents${q}`);
+}
+
+export async function uploadDocument(
+  file: File,
+  opts: { title?: string; doc_type?: string; project_key?: string }
+): Promise<DocumentInfo> {
+  const form = new FormData();
+  form.append("file", file);
+  if (opts.title) form.append("title", opts.title);
+  form.append("doc_type", opts.doc_type || "governance");
+  if (opts.project_key) form.append("project_key", opts.project_key);
+
+  const response = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body: form });
+  if (!response.ok) throw new Error(await response.text() || "Upload failed");
+  return response.json();
+}
+
+export async function seedGovernanceDoc(projectKey?: string): Promise<DocumentInfo> {
+  const form = new FormData();
+  if (projectKey) form.append("project_key", projectKey);
+  const response = await fetch(`${API_URL}/api/documents/seed-governance`, { method: "POST", body: form });
+  if (!response.ok) throw new Error(await response.text() || "Seed failed");
+  return response.json();
+}
+
+export function generateReport(
+  projectKey: string,
+  template: string
+): Promise<ExecutiveReport> {
+  return fetchJson(`/api/agents/projects/${projectKey}/reports/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+}
+
+export async function downloadReportPdf(html: string, title: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/agents/reports/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html, title }),
+  });
+  if (!response.ok) {
+    throw new Error((await response.text()) || "PDF export failed");
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${title.replace(/[^\w\s-]/g, "").trim() || "report"}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function checkHealth(): Promise<{ status: string }> {
   return fetchJson("/health");
 }
