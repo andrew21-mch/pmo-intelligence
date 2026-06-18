@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   analyzeMeeting,
   checkHealth,
@@ -40,6 +40,13 @@ function raidTypeClass(type: string) {
   return "raid-assumption";
 }
 
+const RAID_COLUMNS = [
+  { type: "Risk" as const, letter: "R", label: "Risks", hint: "What might go wrong" },
+  { type: "Assumption" as const, letter: "A", label: "Assumptions", hint: "What we believe is true" },
+  { type: "Issue" as const, letter: "I", label: "Issues", hint: "What is wrong now" },
+  { type: "Dependency" as const, letter: "D", label: "Dependencies", hint: "What we rely on" },
+];
+
 export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -56,6 +63,19 @@ export default function App() {
   const [raidLoading, setRaidLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const raidByType = useMemo(() => {
+    const grouped: Record<string, RaidEntry[]> = {
+      Risk: [],
+      Assumption: [],
+      Issue: [],
+      Dependency: [],
+    };
+    for (const entry of raidEntries) {
+      grouped[entry.entry_type]?.push(entry);
+    }
+    return grouped;
+  }, [raidEntries]);
 
   const refresh = useCallback(async () => {
     try {
@@ -386,31 +406,85 @@ export default function App() {
       )}
 
       {projects.length > 0 && selectedProject && (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>RAID Log</h2>
+        <section className="panel raid-panel">
+          <div className="raid-panel-top">
+            <div>
+              <h2>RAID Log</h2>
+              <p className="raid-subtitle">
+                Risks · Assumptions · Issues · Dependencies — auto-generated from Jira
+              </p>
+            </div>
             <button className="btn-secondary" onClick={handleGenerateRaid} disabled={raidLoading}>
               {raidLoading ? "Generating…" : "Generate RAID Log"}
             </button>
           </div>
-          <p className="muted">
-            Risks, Assumptions, Issues, and Dependencies auto-generated from Jira data.
-          </p>
-          {raidEntries.length === 0 ? (
-            <p className="muted">No RAID entries yet. Click Generate RAID Log.</p>
-          ) : (
-            <div className="raid-grid">
-              {raidEntries.map((entry) => (
-                <div key={entry.id} className="raid-card">
-                  <div className="raid-card-header">
-                    <span className={`raid-type ${raidTypeClass(entry.entry_type)}`}>{entry.entry_type}</span>
-                    <span className={`signal-severity ${riskClass(entry.severity)}`}>{entry.severity}</span>
+
+          {raidEntries.length > 0 && (
+            <div className="raid-summary">
+              {RAID_COLUMNS.map((col) => (
+                <div key={col.type} className={`raid-summary-item ${raidTypeClass(col.type)}`}>
+                  <span className="raid-summary-letter">{col.letter}</span>
+                  <div>
+                    <span className="raid-summary-count">{raidByType[col.type].length}</span>
+                    <span className="raid-summary-label">{col.label}</span>
                   </div>
-                  <h4>{entry.title}</h4>
-                  <p className="raid-desc">{entry.description}</p>
-                  <p><strong>Impact:</strong> {entry.impact}</p>
-                  <p><strong>Mitigation:</strong> {entry.mitigation}</p>
-                  {entry.jira_key && <p className="muted">Linked: {entry.jira_key}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {raidEntries.length === 0 ? (
+            <div className="raid-empty">
+              <div className="raid-empty-letters">
+                {RAID_COLUMNS.map((col) => (
+                  <span key={col.type} className={`raid-empty-letter ${raidTypeClass(col.type)}`}>
+                    {col.letter}
+                  </span>
+                ))}
+              </div>
+              <p>No RAID entries yet</p>
+              <span className="muted">Generate a log from your synced Jira data</span>
+            </div>
+          ) : (
+            <div className="raid-board">
+              {RAID_COLUMNS.map((col) => (
+                <div key={col.type} className={`raid-column ${raidTypeClass(col.type)}`}>
+                  <div className="raid-column-header">
+                    <span className="raid-column-letter">{col.letter}</span>
+                    <div>
+                      <h3>{col.label}</h3>
+                      <span className="raid-column-hint">{col.hint}</span>
+                    </div>
+                    <span className="raid-column-count">{raidByType[col.type].length}</span>
+                  </div>
+                  <div className="raid-column-body">
+                    {raidByType[col.type].length === 0 ? (
+                      <p className="raid-column-empty">None detected</p>
+                    ) : (
+                      raidByType[col.type].map((entry) => (
+                        <article key={entry.id} className="raid-entry">
+                          <div className="raid-entry-top">
+                            <span className={`raid-severity ${riskClass(entry.severity)}`}>
+                              {entry.severity}
+                            </span>
+                            {entry.jira_key && (
+                              <span className="raid-jira-key">{entry.jira_key}</span>
+                            )}
+                          </div>
+                          <h4>{entry.title}</h4>
+                          <p className="raid-entry-desc">{entry.description}</p>
+                          <div className="raid-entry-field">
+                            <span className="raid-field-label">Impact</span>
+                            <p>{entry.impact}</p>
+                          </div>
+                          <div className="raid-entry-field raid-entry-mitigation">
+                            <span className="raid-field-label">Mitigation</span>
+                            <p>{entry.mitigation}</p>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
