@@ -2,6 +2,8 @@
 
 AI-powered PMO intelligence platform demonstrating agentic AI, enterprise Jira integration, RAG-backed governance citations, multi-agent orchestration, and executive reporting with PDF export.
 
+📎 **[Project overview (Gist)](https://gist.github.com/andrew21-mch/75e7a8dbb1b98f77356c7f4878650387)** — concise portfolio summary with architecture, demo flow, and API reference.
+
 ## Features
 
 | Capability | Description |
