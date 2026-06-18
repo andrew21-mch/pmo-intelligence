@@ -64,3 +64,71 @@ class RiskAssessment(BaseModel):
     signals: list[RiskSignal]
     reasoning: str
     recommended_actions: list[str]
+
+
+class RaidEntryType(str, Enum):
+    RISK = "Risk"
+    ASSUMPTION = "Assumption"
+    ISSUE = "Issue"
+    DEPENDENCY = "Dependency"
+
+
+class RaidEntry(BaseModel):
+    entry_type: RaidEntryType
+    title: str
+    description: str
+    severity: RiskLevel
+    impact: str
+    mitigation: str
+    source: str = "agent"
+    jira_key: str | None = None
+
+
+class RaidLogReport(BaseModel):
+    project_key: str
+    project_name: str
+    entries: list[RaidEntry]
+    summary: str
+
+
+class ActionItem(BaseModel):
+    description: str
+    assignee: str | None = None
+    due_date: str | None = None
+
+
+class MeetingDecision(BaseModel):
+    description: str
+
+
+class MeetingRisk(BaseModel):
+    description: str
+    severity: RiskLevel = RiskLevel.MEDIUM
+
+
+class MeetingIntelligenceReport(BaseModel):
+    project_key: str
+    title: str
+    summary: str
+    action_items: list[ActionItem]
+    decisions: list[MeetingDecision]
+    risks_identified: list[MeetingRisk]
+    jira_tickets_created: list[str] = Field(default_factory=list)
+
+
+class RaidEntryStored(RaidEntry):
+    id: int
+    project_key: str
+    created_at: str
+
+
+class MeetingRecordStored(BaseModel):
+    id: int
+    project_key: str
+    title: str
+    summary: str
+    action_items: list[ActionItem]
+    decisions: list[MeetingDecision]
+    risks_identified: list[MeetingRisk]
+    jira_tickets_created: list[str]
+    created_at: str

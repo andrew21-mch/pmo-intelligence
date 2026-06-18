@@ -134,6 +134,60 @@ export function getProjectRisk(projectKey: string): Promise<RiskAssessment> {
   return fetchJson(`/api/agents/projects/${projectKey}/risk`);
 }
 
+export interface RaidEntry {
+  id: number;
+  project_key: string;
+  entry_type: "Risk" | "Assumption" | "Issue" | "Dependency";
+  title: string;
+  description: string;
+  severity: "Low" | "Medium" | "High";
+  impact: string;
+  mitigation: string;
+  source: string;
+  jira_key: string | null;
+  created_at: string;
+}
+
+export interface RaidLogReport {
+  project_key: string;
+  project_name: string;
+  entries: Omit<RaidEntry, "id" | "project_key" | "created_at">[];
+  summary: string;
+}
+
+export interface MeetingReport {
+  project_key: string;
+  title: string;
+  summary: string;
+  action_items: { description: string; assignee: string | null; due_date: string | null }[];
+  decisions: { description: string }[];
+  risks_identified: { description: string; severity: string }[];
+  jira_tickets_created: string[];
+}
+
+export function generateRaid(projectKey: string): Promise<RaidLogReport> {
+  return fetchJson(`/api/agents/projects/${projectKey}/raid/generate`, { method: "POST" });
+}
+
+export function getRaidEntries(projectKey: string): Promise<RaidEntry[]> {
+  return fetchJson(`/api/agents/projects/${projectKey}/raid`);
+}
+
+export function analyzeMeeting(
+  projectKey: string,
+  body: { transcript: string; title?: string; create_jira_tickets?: boolean }
+): Promise<MeetingReport> {
+  return fetchJson(`/api/agents/projects/${projectKey}/meetings/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getSampleTranscript(): Promise<{ transcript: string }> {
+  return fetchJson("/api/agents/meetings/sample-transcript");
+}
+
 export function checkHealth(): Promise<{ status: string }> {
   return fetchJson("/health");
 }

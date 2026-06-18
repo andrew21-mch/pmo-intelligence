@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  analyzeMeeting,
   checkHealth,
   DashboardStats,
+  generateRaid,
   getProjectRisk,
   getProjects,
   getProjectStatus,
+  getRaidEntries,
+  getSampleTranscript,
   getStats,
+  MeetingReport,
   ProjectSummary,
   ProjectStatusReport,
+  RaidEntry,
   RiskAssessment,
   seedDemoData,
   seedJiraProject,
@@ -27,15 +33,28 @@ function riskClass(risk: string) {
   return "risk-high";
 }
 
+function raidTypeClass(type: string) {
+  if (type === "Risk") return "raid-risk";
+  if (type === "Issue") return "raid-issue";
+  if (type === "Dependency") return "raid-dependency";
+  return "raid-assumption";
+}
+
 export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [status, setStatus] = useState<ProjectStatusReport | null>(null);
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
+  const [raidEntries, setRaidEntries] = useState<RaidEntry[]>([]);
+  const [meetingReport, setMeetingReport] = useState<MeetingReport | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [createJiraTickets, setCreateJiraTickets] = useState(false);
   const [health, setHealth] = useState<string>("checking");
   const [syncing, setSyncing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [raidLoading, setRaidLoading] = useState(false);
+  const [meetingLoading, setMeetingLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -57,6 +76,16 @@ export default function App() {
     }
   }, [selectedProject]);
 
+  const loadRaid = useCallback(async (projectKey: string) => {
+    if (!projectKey) return;
+    try {
+      const entries = await getRaidEntries(projectKey);
+      setRaidEntries(entries);
+    } catch {
+      setRaidEntries([]);
+    }
+  }, []);
+
   const loadAnalysis = useCallback(async (projectKey: string) => {
     if (!projectKey) return;
     setAnalyzing(true);
@@ -68,12 +97,13 @@ export default function App() {
       setStatus(statusRes);
       setRisk(riskRes);
       setError(null);
+      await loadRaid(projectKey);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setAnalyzing(false);
     }
-  }, []);
+  }, [loadRaid]);
 
   useEffect(() => {
     refresh();
@@ -147,12 +177,56 @@ export default function App() {
     }
   };
 
+  const handleGenerateRaid = async () => {
+    if (!selectedProject) return;
+    setRaidLoading(true);
+    setError(null);
+    try {
+      await generateRaid(selectedProject);
+      await loadRaid(selectedProject);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "RAID generation failed");
+    } finally {
+      setRaidLoading(false);
+    }
+  };
+
+  const handleLoadSampleTranscript = async () => {
+    try {
+      const { transcript: sample } = await getSampleTranscript();
+      setTranscript(sample);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load sample");
+    }
+  };
+
+  const handleAnalyzeMeeting = async () => {
+    if (!selectedProject) return;
+    setMeetingLoading(true);
+    setError(null);
+    try {
+      const report = await analyzeMeeting(selectedProject, {
+        transcript,
+        title: "Sprint Review Meeting",
+        create_jira_tickets: createJiraTickets,
+      });
+      setMeetingReport(report);
+      if (createJiraTickets && report.jira_tickets_created.length > 0) {
+        await refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Meeting analysis failed");
+    } finally {
+      setMeetingLoading(false);
+    }
+  };
+
   return (
     <div className="app">
       <header className="header">
         <div>
           <h1>PMO Intelligence Platform</h1>
-          <p className="subtitle">Jira sync · Project health · Risk analysis</p>
+          <p className="subtitle">Jira sync · Health · Risk · RAID · Meeting intelligence</p>
         </div>
         <div className="header-actions">
           <span className={`badge ${health === "healthy" ? "badge-green" : "badge-red"}`}>
@@ -305,6 +379,105 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {projects.length > 0 && selectedProject && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>RAID Log</h2>
+            <button className="btn-secondary" onClick={handleGenerateRaid} disabled={raidLoading}>
+              {raidLoading ? "Generating…" : "Generate RAID Log"}
+            </button>
+          </div>
+          <p className="muted">
+            Risks, Assumptions, Issues, and Dependencies auto-generated from Jira data.
+          </p>
+          {raidEntries.length === 0 ? (
+            <p className="muted">No RAID entries yet. Click Generate RAID Log.</p>
+          ) : (
+            <div className="raid-grid">
+              {raidEntries.map((entry) => (
+                <div key={entry.id} className="raid-card">
+                  <div className="raid-card-header">
+                    <span className={`raid-type ${raidTypeClass(entry.entry_type)}`}>{entry.entry_type}</span>
+                    <span className={`signal-severity ${riskClass(entry.severity)}`}>{entry.severity}</span>
+                  </div>
+                  <h4>{entry.title}</h4>
+                  <p className="raid-desc">{entry.description}</p>
+                  <p><strong>Impact:</strong> {entry.impact}</p>
+                  <p><strong>Mitigation:</strong> {entry.mitigation}</p>
+                  {entry.jira_key && <p className="muted">Linked: {entry.jira_key}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {projects.length > 0 && selectedProject && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Meeting Intelligence</h2>
+            <div className="header-actions">
+              <button className="btn-secondary" onClick={handleLoadSampleTranscript}>
+                Load Sample
+              </button>
+              <button onClick={handleAnalyzeMeeting} disabled={meetingLoading}>
+                {meetingLoading ? "Analyzing…" : "Analyze Transcript"}
+              </button>
+            </div>
+          </div>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={createJiraTickets}
+              onChange={(e) => setCreateJiraTickets(e.target.checked)}
+            />
+            Create Jira tickets from action items
+          </label>
+          <textarea
+            className="transcript-input"
+            rows={8}
+            placeholder="Paste Teams or Zoom transcript here…"
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+          />
+          {meetingReport && (
+            <div className="meeting-results">
+              <h3>{meetingReport.title}</h3>
+              <p>{meetingReport.summary}</p>
+              <div className="meeting-columns">
+                <div>
+                  <h4>Action Items ({meetingReport.action_items.length})</h4>
+                  <ul>
+                    {meetingReport.action_items.map((a, i) => (
+                      <li key={i}>{a.assignee ? `${a.assignee}: ` : ""}{a.description}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4>Decisions ({meetingReport.decisions.length})</h4>
+                  <ul>
+                    {meetingReport.decisions.map((d, i) => (
+                      <li key={i}>{d.description}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4>Risks ({meetingReport.risks_identified.length})</h4>
+                  <ul>
+                    {meetingReport.risks_identified.map((r, i) => (
+                      <li key={i}><span className={`signal-severity ${riskClass(r.severity)}`}>{r.severity}</span> {r.description}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              {meetingReport.jira_tickets_created.length > 0 && (
+                <p className="muted">Jira tickets created: {meetingReport.jira_tickets_created.join(", ")}</p>
               )}
             </div>
           )}

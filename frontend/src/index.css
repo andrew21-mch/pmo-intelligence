@@ -275,3 +275,88 @@ li {
   margin-bottom: 0.35rem;
   font-size: 0.9rem;
 }
+
+.raid-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.raid-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid #cbd5e1;
+}
+
+.raid-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.raid-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.raid-desc {
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.raid-type {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.raid-risk { background: #fee2e2; color: #991b1b; }
+.raid-issue { background: #ffedd5; color: #9a3412; }
+.raid-dependency { background: #dbeafe; color: #1e40af; }
+.raid-assumption { background: #f3e8ff; color: #6b21a8; }
+
+.transcript-input {
+  width: 100%;
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.meeting-results {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.meeting-results h3 {
+  margin: 0 0 0.5rem;
+}
+
+.meeting-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.meeting-columns h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
