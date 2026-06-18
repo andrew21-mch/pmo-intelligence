@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app.agents.raid_agent import RaidAgent
 from app.agents.risk_agent import RiskAgent
-from app.agents.schemas import RiskLevel
+from app.agents.schemas import ProjectStatusReport, RaidLogReport, RiskAssessment, RiskLevel
 from app.agents.status_agent import StatusAgent
 from app.services.project_context import ProjectContext
 from app.services.rag import RAGService
@@ -20,13 +20,21 @@ class ReportingAgent:
         db,
         *,
         rag_hits: list[dict] | None = None,
+        status: ProjectStatusReport | None = None,
+        risk: RiskAssessment | None = None,
+        raid_report: RaidLogReport | None = None,
+        save_raid: bool = True,
     ) -> dict:
         template = template if template in self.TEMPLATES else "weekly"
 
-        status = await StatusAgent().analyze(ctx)
-        risk = await RiskAgent().analyze(ctx)
-        raid_report = await RaidAgent().analyze(ctx)
-        await RaidService(db).save_report(raid_report)
+        if status is None:
+            status = await StatusAgent().analyze(ctx)
+        if risk is None:
+            risk = await RiskAgent().analyze(ctx)
+        if raid_report is None:
+            raid_report = await RaidAgent().analyze(ctx)
+            if save_raid:
+                await RaidService(db).save_report(raid_report)
 
         if rag_hits is None:
             rag = RAGService()

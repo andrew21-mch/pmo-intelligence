@@ -211,6 +211,43 @@ export interface ExecutiveReport {
   citations: { title: string; excerpt: string; doc_id: number | null }[];
 }
 
+export interface BriefingPipelineStep {
+  agent: string;
+  label: string;
+  duration_ms: number;
+  status: string;
+  error?: string;
+}
+
+export interface PmoBriefing {
+  project_key: string;
+  project_name: string;
+  template: string;
+  generated_at: string;
+  status: ProjectStatusReport;
+  risk: RiskAssessment;
+  raid: { entry_count: number; summary: string };
+  report: ExecutiveReport;
+  pipeline: { total_duration_ms: number; steps: BriefingPipelineStep[] };
+  headline: {
+    health: string;
+    risk_score: string;
+    raid_entries: number;
+    citations: number;
+  };
+}
+
+export function generateBriefing(
+  projectKey: string,
+  template: string
+): Promise<PmoBriefing> {
+  return fetchJson(`/api/agents/projects/${projectKey}/briefing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+}
+
 export function listDocuments(projectKey?: string): Promise<DocumentInfo[]> {
   const q = projectKey ? `?project_key=${projectKey}` : "";
   return fetchJson(`/api/documents${q}`);

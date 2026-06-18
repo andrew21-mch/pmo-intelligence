@@ -7,6 +7,7 @@ import {
   ExecutiveReport,
   generateRaid,
   generateReport,
+  generateBriefing,
   getProjectRisk,
   getProjects,
   getProjectStatus,
@@ -15,6 +16,7 @@ import {
   getStats,
   listDocuments,
   MeetingReport,
+  PmoBriefing,
   ProjectSummary,
   ProjectStatusReport,
   RaidEntry,
@@ -54,6 +56,18 @@ const RAID_COLUMNS = [
   { type: "Dependency" as const, letter: "D", label: "Dependencies", hint: "What we rely on" },
 ];
 
+type AppTab = "briefing" | "analysis" | "raid" | "meetings" | "knowledge" | "reports" | "projects";
+
+const APP_TABS: { id: AppTab; label: string }[] = [
+  { id: "briefing", label: "PMO Briefing" },
+  { id: "analysis", label: "Analysis" },
+  { id: "raid", label: "RAID Log" },
+  { id: "meetings", label: "Meetings" },
+  { id: "knowledge", label: "Knowledge Base" },
+  { id: "reports", label: "Reports" },
+  { id: "projects", label: "Projects" },
+];
+
 export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -75,7 +89,10 @@ export default function App() {
   const [reportView, setReportView] = useState<"markdown" | "html">("html");
   const [reportLoading, setReportLoading] = useState(false);
   const [pdfExportLoading, setPdfExportLoading] = useState(false);
+  const [briefing, setBriefing] = useState<PmoBriefing | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<AppTab>("briefing");
   const [error, setError] = useState<string | null>(null);
 
   const raidByType = useMemo(() => {
@@ -271,6 +288,25 @@ export default function App() {
     }
   };
 
+  const handleGenerateBriefing = async () => {
+    if (!selectedProject) return;
+    setBriefingLoading(true);
+    setError(null);
+    try {
+      const result = await generateBriefing(selectedProject, reportTemplate);
+      setBriefing(result);
+      setStatus(result.status);
+      setRisk(result.risk);
+      setReport(result.report);
+      await loadRaid(selectedProject);
+      setActiveTab("briefing");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Briefing generation failed");
+    } finally {
+      setBriefingLoading(false);
+    }
+  };
+
   const handleGenerateReport = async () => {
     if (!selectedProject) return;
     setReportLoading(true);
@@ -359,9 +395,9 @@ export default function App() {
       </section>
 
       {projects.length > 0 && (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Project Analysis</h2>
+        <div className="workspace-toolbar">
+          <label className="project-select-label">
+            Project
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
@@ -372,9 +408,100 @@ export default function App() {
                 </option>
               ))}
             </select>
+          </label>
+          <nav className="main-tabs" aria-label="Dashboard sections">
+            {APP_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={activeTab === tab.id ? "main-tab main-tab-active" : "main-tab"}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {projects.length === 0 && (
+        <section className="panel">
+          <h2>Get Started</h2>
+          <p className="muted">
+            No projects yet. Click <strong>Load Demo Data</strong> to try agents without Jira,
+            or configure Jira credentials and sync.
+          </p>
+        </section>
+      )}
+
+      {projects.length > 0 && activeTab === "briefing" && (
+        <section className="panel briefing-panel">
+          <div className="panel-header">
+            <div>
+              <h2>PMO Briefing</h2>
+              <p className="muted briefing-subtitle">
+                One-click pipeline: Status → Risk → RAID → RAG → Executive Report
+              </p>
+            </div>
+            <div className="briefing-actions">
+              <select value={reportTemplate} onChange={(e) => setReportTemplate(e.target.value)}>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="steering_committee">Steering Committee</option>
+              </select>
+              <button onClick={handleGenerateBriefing} disabled={briefingLoading || !selectedProject}>
+                {briefingLoading ? "Running pipeline…" : "Generate PMO Briefing"}
+              </button>
+            </div>
+          </div>
+
+          {briefing && (
+            <div className="briefing-results">
+              <div className="briefing-headline">
+                <span className={`health-badge ${healthClass(briefing.headline.health)}`}>
+                  {briefing.headline.health}
+                </span>
+                <span className={`risk-badge ${riskClass(briefing.headline.risk_score)}`}>
+                  Risk: {briefing.headline.risk_score}
+                </span>
+                <span className="briefing-stat">{briefing.headline.raid_entries} RAID entries</span>
+                <span className="briefing-stat">{briefing.headline.citations} citations</span>
+                <span className="muted">{briefing.generated_at}</span>
+              </div>
+              <div className="pipeline-steps">
+                {briefing.pipeline.steps.map((step) => (
+                  <div key={step.agent} className={`pipeline-step pipeline-${step.status}`}>
+                    <span className="pipeline-label">{step.label}</span>
+                    <span className="pipeline-duration">{step.duration_ms} ms</span>
+                  </div>
+                ))}
+                <div className="pipeline-total">
+                  Total: {briefing.pipeline.total_duration_ms} ms
+                </div>
+              </div>
+              <p className="muted briefing-hint">
+                Open the <strong>Analysis</strong>, <strong>RAID Log</strong>, and <strong>Reports</strong> tabs to explore full outputs.
+              </p>
+            </div>
+          )}
+
+          {!briefing && !briefingLoading && (
+            <p className="muted">Select a report template and run the full agent pipeline for {selectedProject}.</p>
+          )}
+        </section>
+      )}
+
+      {projects.length > 0 && activeTab === "analysis" && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Project Analysis</h2>
           </div>
 
           {analyzing && <p className="muted">Running agents…</p>}
+
+          {!analyzing && !status && (
+            <p className="muted">Run <strong>Generate PMO Briefing</strong> on the Briefing tab, or wait for analysis to load.</p>
+          )}
 
           {status && (
             <div className="analysis-grid">
@@ -483,7 +610,7 @@ export default function App() {
         </section>
       )}
 
-      {projects.length > 0 && selectedProject && (
+      {projects.length > 0 && selectedProject && activeTab === "raid" && (
         <section className="panel raid-panel">
           <div className="raid-panel-top">
             <div>
@@ -570,7 +697,7 @@ export default function App() {
         </section>
       )}
 
-      {projects.length > 0 && selectedProject && (
+      {projects.length > 0 && selectedProject && activeTab === "meetings" && (
         <section className="panel">
           <div className="panel-header">
             <h2>Meeting Intelligence</h2>
@@ -636,7 +763,7 @@ export default function App() {
         </section>
       )}
 
-      {projects.length > 0 && selectedProject && (
+      {projects.length > 0 && selectedProject && activeTab === "knowledge" && (
         <section className="panel">
           <div className="panel-header">
             <h2>Knowledge Base (RAG)</h2>
@@ -673,7 +800,7 @@ export default function App() {
         </section>
       )}
 
-      {projects.length > 0 && selectedProject && (
+      {projects.length > 0 && selectedProject && activeTab === "reports" && (
         <section className="panel report-panel">
           <div className="panel-header">
             <h2>Executive Reporting</h2>
@@ -739,14 +866,9 @@ export default function App() {
         </section>
       )}
 
-      <section className="panel">
-        <h2>Projects</h2>
-        {projects.length === 0 ? (
-          <p className="muted">
-            No projects yet. Click <strong>Load Demo Data</strong> to try agents without Jira,
-            or configure Jira credentials and sync.
-          </p>
-        ) : (
+      {projects.length > 0 && activeTab === "projects" && (
+        <section className="panel">
+          <h2>Projects</h2>
           <table>
             <thead>
               <tr>
@@ -769,8 +891,8 @@ export default function App() {
               ))}
             </tbody>
           </table>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }

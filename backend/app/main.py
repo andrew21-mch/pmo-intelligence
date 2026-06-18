@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.agents import router as agents_router
+from app.api.briefing import router as briefing_router
 from app.api.dev import router as dev_router
 from app.api.documents import router as documents_router
 from app.api.jira import router as jira_router
@@ -73,6 +74,7 @@ app.add_middleware(
 
 app.include_router(jira_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
+app.include_router(briefing_router, prefix="/api")
 app.include_router(raid_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")

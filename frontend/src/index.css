@@ -14,7 +14,7 @@ body {
 }
 
 .app {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
 }
@@ -121,6 +121,67 @@ button:disabled {
   margin-top: 0.35rem;
   font-size: 2rem;
   font-weight: 700;
+}
+
+.workspace-toolbar {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.project-select-label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.project-select-label select {
+  min-width: 220px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.main-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.main-tab {
+  padding: 0.5rem 0.9rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.main-tab:hover {
+  background: #e2e8f0;
+}
+
+.main-tab-active {
+  background: #1d4ed8;
+  color: white;
+  border-color: #1d4ed8;
+}
+
+.briefing-hint {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
 }
 
 .panel {
@@ -694,6 +755,83 @@ li {
 
 .upload-btn:hover {
   background: #334155;
+}
+
+.briefing-panel {
+  border: 2px solid #1d4ed8;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 40%);
+}
+
+.briefing-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}
+
+.briefing-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.briefing-results {
+  margin-top: 1rem;
+}
+
+.briefing-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.briefing-stat {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.pipeline-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  font-size: 0.85rem;
+}
+
+.pipeline-step.pipeline-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pipeline-step.pipeline-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.pipeline-label {
+  font-weight: 600;
+}
+
+.pipeline-duration {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.pipeline-total {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
 }
 
 .report-meta {
