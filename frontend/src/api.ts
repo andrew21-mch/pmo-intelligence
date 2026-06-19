@@ -293,6 +293,103 @@ export function generateBriefing(
   });
 }
 
+export interface BriefingStreamEvent {
+  event: "pipeline_start" | "step_complete" | "done" | "error";
+  steps?: { agent: string; label: string }[];
+  step?: BriefingPipelineStep;
+  snapshot?: Record<string, unknown>;
+  briefing?: PmoBriefing;
+  message?: string;
+}
+
+export async function streamBriefing(
+  projectKey: string,
+  template: string,
+  onEvent: (event: BriefingStreamEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/agents/projects/${projectKey}/briefing/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template }),
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") return;
+    throw new Error(`Cannot reach API at ${API_URL}. Is docker-compose running?`);
+  }
+
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      message = body.detail ?? body.message ?? message;
+    } catch {
+      const text = await response.text();
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Streaming not supported by browser");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      onEvent(JSON.parse(line.slice(6)) as BriefingStreamEvent);
+    }
+  }
+}
+
+export interface PortfolioProjectBrief {
+  project_key: string;
+  project_name: string;
+  health: string;
+  risk_score: string;
+  executive_summary: string;
+  risk_reasoning: string;
+  blocked_count: number;
+  overdue_count: number;
+  signal_count: number;
+  top_actions: string[];
+}
+
+export interface PortfolioBriefing {
+  template: string;
+  generated_at: string;
+  project_count: number;
+  executive_summary: string;
+  headline: {
+    red: number;
+    amber: number;
+    green: number;
+    high_risk: number;
+    medium_risk: number;
+    low_risk: number;
+  };
+  projects: PortfolioProjectBrief[];
+  at_risk_projects: PortfolioProjectBrief[];
+}
+
+export function generatePortfolioBriefing(template: string): Promise<PortfolioBriefing> {
+  return fetchJson("/api/agents/portfolio/briefing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+}
+
 export function listDocuments(projectKey?: string): Promise<DocumentInfo[]> {
   const q = projectKey ? `?project_key=${projectKey}` : "";
   return fetchJson(`/api/documents${q}`);

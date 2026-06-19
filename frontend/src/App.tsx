@@ -7,7 +7,10 @@ import {
   ExecutiveReport,
   generateRaid,
   generateReport,
-  generateBriefing,
+  streamBriefing,
+  generatePortfolioBriefing,
+  BriefingPipelineStep,
+  PortfolioBriefing,
   getProjectRisk,
   getProjects,
   getProjectStatus,
@@ -112,6 +115,10 @@ export default function App() {
   const [reportLoading, setReportLoading] = useState(false);
   const [pdfExportLoading, setPdfExportLoading] = useState(false);
   const [briefing, setBriefing] = useState<PmoBriefing | null>(null);
+  const [portfolioBriefing, setPortfolioBriefing] = useState<PortfolioBriefing | null>(null);
+  const [briefingMode, setBriefingMode] = useState<"project" | "portfolio">("project");
+  const [livePipelineSteps, setLivePipelineSteps] = useState<BriefingPipelineStep[]>([]);
+  const [liveSnapshots, setLiveSnapshots] = useState<Record<string, Record<string, unknown>>>({});
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>("briefing");
@@ -328,15 +335,68 @@ export default function App() {
   };
 
   const handleGenerateBriefing = async () => {
-    if (!selectedProject) return;
     setBriefingLoading(true);
     setError(null);
+    setLivePipelineSteps([]);
+    setLiveSnapshots({});
+
+    if (briefingMode === "portfolio") {
+      try {
+        const result = await generatePortfolioBriefing(reportTemplate);
+        setPortfolioBriefing(result);
+        setBriefing(null);
+        setActiveTab("briefing");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Portfolio briefing failed");
+      } finally {
+        setBriefingLoading(false);
+      }
+      return;
+    }
+
+    if (!selectedProject) {
+      setBriefingLoading(false);
+      return;
+    }
+
     try {
-      const result = await generateBriefing(selectedProject, reportTemplate);
-      setBriefing(result);
-      setStatus(result.status);
-      setRisk(result.risk);
-      setReport(result.report);
+      await streamBriefing(selectedProject, reportTemplate, (event) => {
+        if (event.event === "pipeline_start" && event.steps) {
+          setLivePipelineSteps(
+            event.steps.map((step) => ({
+              agent: step.agent,
+              label: step.label,
+              duration_ms: 0,
+              status: "running",
+            }))
+          );
+        }
+        if (event.event === "step_complete" && event.step) {
+          setLivePipelineSteps((prev) => {
+            const next = [...prev];
+            const idx = next.findIndex((s) => s.agent === event.step!.agent);
+            if (idx >= 0) next[idx] = event.step!;
+            else next.push(event.step!);
+            return next;
+          });
+          if (event.snapshot) {
+            setLiveSnapshots((prev) => ({
+              ...prev,
+              [event.step!.agent]: event.snapshot!,
+            }));
+          }
+        }
+        if (event.event === "done" && event.briefing) {
+          setBriefing(event.briefing);
+          setPortfolioBriefing(null);
+          setStatus(event.briefing.status);
+          setRisk(event.briefing.risk);
+          setReport(event.briefing.report);
+        }
+        if (event.event === "error") {
+          setError(event.message ?? "Briefing stream failed");
+        }
+      });
       await loadRaid(selectedProject);
       setActiveTab("briefing");
     } catch (err) {
@@ -531,16 +591,120 @@ export default function App() {
               </p>
             </div>
             <div className="briefing-actions">
+              <select
+                value={briefingMode}
+                onChange={(e) => setBriefingMode(e.target.value as "project" | "portfolio")}
+              >
+                <option value="project">This project</option>
+                <option value="portfolio">All projects (portfolio)</option>
+              </select>
               <select value={reportTemplate} onChange={(e) => setReportTemplate(e.target.value)}>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
                 <option value="steering_committee">Steering Committee</option>
               </select>
-              <button onClick={handleGenerateBriefing} disabled={briefingLoading || !selectedProject}>
-                {briefingLoading ? "Running pipeline…" : "Generate PMO Briefing"}
+              <button
+                onClick={handleGenerateBriefing}
+                disabled={briefingLoading || (briefingMode === "project" && !selectedProject)}
+              >
+                {briefingLoading
+                  ? briefingMode === "portfolio"
+                    ? "Analyzing portfolio…"
+                    : "Running pipeline…"
+                  : briefingMode === "portfolio"
+                    ? "Generate Portfolio Briefing"
+                    : "Generate PMO Briefing"}
               </button>
             </div>
           </div>
+
+          {briefingLoading && livePipelineSteps.length > 0 && briefingMode === "project" && (
+            <div className="briefing-results">
+              <p className="muted">Live pipeline progress</p>
+              <div className="pipeline-steps">
+                {livePipelineSteps.map((step) => (
+                  <div
+                    key={step.agent}
+                    className={`pipeline-step pipeline-${step.status === "running" ? "running" : step.status}`}
+                  >
+                    <span className="pipeline-label">{step.label}</span>
+                    {step.status === "running" ? (
+                      <span className="pipeline-duration">running…</span>
+                    ) : (
+                      <span className="pipeline-duration">{step.duration_ms} ms</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {Object.entries(liveSnapshots).map(([agent, snapshot]) => (
+                <div key={agent} className="explain-snapshot">
+                  <strong>{agent}:</strong>{" "}
+                  {Object.entries(snapshot)
+                    .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
+                    .join(" · ")}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {portfolioBriefing && (
+            <div className="briefing-results portfolio-results">
+              <p className="portfolio-summary">{portfolioBriefing.executive_summary}</p>
+              <div className="briefing-headline portfolio-headline">
+                <span className="health-badge health-red">{portfolioBriefing.headline.red} Red</span>
+                <span className="health-badge health-amber">{portfolioBriefing.headline.amber} Amber</span>
+                <span className="health-badge health-green">{portfolioBriefing.headline.green} Green</span>
+                <span className="risk-badge risk-high">{portfolioBriefing.headline.high_risk} High risk</span>
+                <span className="muted">{portfolioBriefing.generated_at}</span>
+              </div>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Project</th>
+                      <th>Health</th>
+                      <th>Risk</th>
+                      <th>Blocked</th>
+                      <th>Overdue</th>
+                      <th>Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portfolioBriefing.projects.map((p) => (
+                      <tr key={p.project_key}>
+                        <td>
+                          <strong>{p.project_key}</strong>
+                          <div className="muted portfolio-name">{p.project_name}</div>
+                        </td>
+                        <td>
+                          <span className={`health-badge ${healthClass(p.health)}`}>{p.health}</span>
+                        </td>
+                        <td>
+                          <span className={`risk-badge ${riskClass(p.risk_score)}`}>{p.risk_score}</span>
+                        </td>
+                        <td>{p.blocked_count}</td>
+                        <td>{p.overdue_count}</td>
+                        <td className="portfolio-cell-summary">{p.executive_summary}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {portfolioBriefing.at_risk_projects.length > 0 && (
+                <div className="portfolio-at-risk">
+                  <h3>Priority attention</h3>
+                  <ul>
+                    {portfolioBriefing.at_risk_projects.map((p) => (
+                      <li key={p.project_key}>
+                        <strong>{p.project_key}</strong> — {p.health} / {p.risk_score}:{" "}
+                        {p.top_actions[0] ?? p.risk_reasoning.slice(0, 120)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {briefing && (
             <div className="briefing-results">
@@ -572,8 +736,12 @@ export default function App() {
             </div>
           )}
 
-          {!briefing && !briefingLoading && (
-            <p className="muted">Select a report template and run the full agent pipeline for {selectedProject}.</p>
+          {!briefing && !portfolioBriefing && !briefingLoading && (
+            <p className="muted">
+              {briefingMode === "portfolio"
+                ? "Run a portfolio rollup across all synced projects."
+                : `Select a report template and run the full agent pipeline for ${selectedProject}.`}
+            </p>
           )}
         </section>
       )}

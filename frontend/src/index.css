@@ -854,6 +854,22 @@ li {
   color: #166534;
 }
 
+.pipeline-step.pipeline-running {
+  background: #dbeafe;
+  color: #1e40af;
+  animation: pipeline-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pipeline-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
 .pipeline-step.pipeline-error {
   background: #fee2e2;
   color: #991b1b;
@@ -873,6 +889,88 @@ li {
   font-size: 0.85rem;
   font-weight: 600;
   color: #475569;
+}
+
+.explain-snapshot {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border-left: 3px solid #1d4ed8;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.portfolio-results {
+  margin-top: 1rem;
+}
+
+.portfolio-summary {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+  color: #0f172a;
+}
+
+.portfolio-headline {
+  margin-bottom: 1.25rem;
+}
+
+.portfolio-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.portfolio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.portfolio-table th,
+.portfolio-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.portfolio-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+}
+
+.portfolio-name {
+  font-size: 0.8rem;
+}
+
+.portfolio-cell-summary {
+  max-width: 280px;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.portfolio-at-risk {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.portfolio-at-risk h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.portfolio-at-risk ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.portfolio-at-risk li {
+  margin-bottom: 0.35rem;
+  line-height: 1.45;
 }
 
 .integration-badge {
